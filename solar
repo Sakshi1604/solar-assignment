@@ -1,0 +1,241 @@
+import pandas as pd
+
+from matplotlib import pyplot as plt
+import math
+# constants
+
+#S=600.4     #Incident_Flux (W/m^2)
+l=float(input("length of collector(m) : "))
+br=float(input("breadth of collector(m) : "))
+#W = 0.12    #Centre dist (m)
+W=float(input("Tube centre-to-centre distance(m) : "))
+
+#D = 0.018   #Output dia. (m)
+D=float(input("Outer Diameter of tube(m): "))
+Di=float(input("Inner Diameter of tube(m): "))
+
+
+#k = 35      # thermal conductivity ( W/mC)
+k=float(input("Thermal conductivity of plate (W/mC) : "))
+
+#t_p =1.3e-3 # plate thickness (mm)
+l_p=float(input("length of Plate(m) : "))
+b_p=float(input("width of plate (m) : "))
+A=l_p*b_p
+
+l_pc1=float(input("plate to cover spacing (m) : "))
+l_c1c2=float(input("between cover spacing (m) : "))
+t_p=float(input("plate thickness (m) : "))
+
+
+U = 4.0     # Overall resistance ( W /m^2C)
+
+Ep=float(input("Plate emissivity: "))
+Ec=float(input("glass cover emissivity: "))
+
+alpha=float(input("enter plate absorptivity : "))
+
+
+#m =  70     # mass flow rate (kg/s)
+m=float(input("water flow rate (kg/h) : "))
+Cp=4180
+hf=float(input("fluid to tube heat transfer coefficient (W/m^2-C): "))
+back_th=float(input(" Back insulation thickness (m ) : "))
+ki=float(input("Insulation themal conductivity (W/m-C ) : "))
+
+wind_speed=float(input("wind speed: "))
+T_fi = 40   # fluid inlet temp (celsius)
+Ta =float(input(" Ambient temp ( celsius) : "))
+T_a=Ta+273.16
+
+Month={"january":0,"february":31,"march":59,"april":90,"may":120,"june":51,"july":181,"august":212,"september":243,"october":273,"november":304,"december":334}
+
+month=input("Enter month : ").lower()
+day=int(input("Enter day : "))
+n=Month[month]+day
+print(n)
+thita=360*(284+n)/365
+delta=math.radians(23.45*math.sin(math.radians(thita)))
+
+L_min=int(input("Enter latitude minutes : "))
+latitude=L_degree+(L_min/60)
+latitude_angle=math.radians(L_degree+(L_min/60))
+
+Lo_degree=int(input(" Enter longitude degree : "))
+Lo_min=int(input("Enter longitude minutes : "))
+time=float(input("enter time(IST): "))
+LAT=60-round(4*(82.5-(Lo_degree+(Lo_min/60))))
+hour_angle= math.radians(((12-(time-1))*60-LAT)*15/60)
+
+rb=c_thita/(math.sin(delta)*math.sin(latitude_angle)+math.cos(delta)*math.cos(latitude_angle)*math.cos(hour_angle))
+rd=(1+math.cos(latitude_angle))/2
+rr=0.2*(1-math.cos(latitude_angle))/2
+
+Ib=float(input("enter beam radiation : "))
+Id=float(input("enter diffused radiation: "))
+I_t=Ib*rb+Id*rd+(Id+Ib)*rr
+  
+incident=math.acos(c_thita)
+print(incident*180/3.14)
+refraction1=math.asin(math.sin(incident)/1.56)
+
+rp=(math.sin(incident-refraction1))**2/(math.sin(incident+refraction1))**2
+rh=(math.tan(incident-refraction1))**2/(math.tan(incident+refraction1))**2
+Trp=(1-rp)/(1+(3*rp))
+Trh=(1-rh)/(1+(3*rh))
+Tr=0.5*(Trp+Trh)
+Ta=math.exp(-0.0524*2/math.cos(refraction1))
+T=Tr*Ta
+T_alpha_b=T*alpha/(1-(1-alpha)*0.22)
+
+rp1=(math.sin(1.0466-0.60323))**2/(math.sin(1.0466+0.60323))**2
+rh1=(math.tan(1.0466-0.60323))**2/(math.tan(1.0466+0.60323))**2
+Trp1=(1-rp1)/(1+(3*rp1))
+Trh1=(1-rh1)/(1+(3*rh1))
+Tr1=0.5*(Trp1+Trh1)
+Ta1=math.exp(-0.0524*2/math.cos(0.60323))
+T1=Tr1*Ta1
+T_alpha_d=T1*alpha/(1-(1-alpha)*0.22)
+
+S=(Ib*rb*T_alpha_b)+(Id*rd*T_alpha_d)
+#Calculation part
+
+def plate_temp(U,T_fi):
+    
+    m_ = (U/(k*t_p))**(0.5)                                            # m^-1
+
+    effectiveness = (np.tanh(m_*(W-D)/2))/(m_*(W-D)/2)
+
+
+#Finding collector efficiency factor (F')  
+
+    F_ = (W*U*((1/(U*((W-D)*effectiveness+D)))+(1/(Di*3.14*hf))))**(-1)
+    part=m*Cp/A
+    F_R = (part/U)*(1-np.exp(-(U*F_ /part)))                       # Heat removal factor
+
+
+    heat_gain = F_R * A *( S - U*(T_fi - Ta))
+
+
+    heat_loss = S*A - heat_gain 
+
+
+    T_pm = (heat_loss/(U*A)) + Ta
+
+
+    T_pm += 273.16
+    return T_pm,heat_gain
+    
+df=pd.read_excel('AIR_PROPERTIES.xlsx')
+df.head()
+
+def convective(T_pm,T_c1,df,spacing):
+    T_mean = (T_pm + T_c1)/2
+    T_mean=round(T_mean-273.16)
+    
+    vis=df.loc[(df['Temperature ']==T_mean),'viscosity']
+    viscosity=vis.item()
+    
+    Pr=df[df['Temperature ']==T_mean]['Pr'].item()
+    t_conductivity=df[df['Temperature ']==T_mean]['t_conductivity'].item()
+
+    rayliegh = 9.81 * (T_mean**(-1)) *((T_pm- T_c1)* (spacing**(3))* Pr* math.cos(latitude_angle) / (viscosity**2))
+    nusselt = 0.229 * rayliegh**(0.252)
+
+    h_pc1 = nusselt* t_conductivity / spacing
+    return h_pc1
+def prop(T_c2,T_a,df):
+    Tmean=round(((T_c2+T_a)/2)-273.16)
+    
+    
+    vis=df.loc[(df['Temperature ']==Tmean),'viscosity']
+    viscosity=vis.item()
+    
+    Pr=df[df['Temperature ']==Tmean]['Pr'].item()
+    t_conductivity=df[df['Temperature ']==Tmean]['t_conductivity'].item()
+    
+    return viscosity,Pr
+lt=[]
+
+while(T_fi<=100):
+    # Calculating heat loss coeficient 
+  
+    while(True):
+
+        T_sky = T_a - 6;
+    
+        T_pm,q_u=plate_temp(U,T_fi)
+        print(T_pm)
+
+        beta = 1/T_pm 
+    
+        T_c1 =  T_pm-15
+        T_c2 = T_c1-15 
+        
+        while(True):
+        
+            h_pc1=convective(T_pm,T_c1,df,l_pc1)
+    
+            h_c1c2=convective(T_c1,T_c2,df,l_c1c2)
+    
+            hr_pc1=5.67e-8*(T_pm+T_c1)*((T_pm**2)+(T_c1**2))/((1/Ep)+(1/Ec)-1)
+            hr_c1c2=5.67e-8*(T_c2+T_c1)*((T_c2**2)+(T_c1**2))/((1/Ec)+(1/Ec)-1)
+            hr_c2a=5.67e-8*Ec*(T_c2**2-T_sky**2)*(T_c2**2+T_sky**2)/(T_c2-T_a)
+            viscosity,Pr=prop(T_c2,T_a,df)
+            Lc=4*l*br/(2*(l+br))
+            Rel=wind_speed*Lc/viscosity
+            j=0.86/(Rel**(0.5))
+            hw=j*1.15*1005*wind_speed/(Pr**(2/3))
+            R1=1/(h_pc1+hr_pc1)
+            R2=1/(h_c1c2+hr_c1c2)
+            R3=1/(hw+hr_c2a)
+            Ut=1/(R1+R2+R3)
+            
+            a=(T_pm-T_c1)/R1
+            b=(T_c1-T_c2)/R2
+            c=(T_c2-T_sky)/R3
+            diff=[abs(a-b),abs(b-c),abs(c-a)]
+            if(any(ele < 1 for ele in diff)):
+                break
+
+        
+            T_c1= T_pm-(Ut*(T_pm-T_a)*R1)
+         
+            T_c2= T_c1-(Ut*(T_pm-T_a)*R2)
+                    
+        
+        Ub=ki/back_th
+        Us=0.1*Ub
+        U_=Ut+Ub+Us
+    
+        if(abs(U_-U)< 2):
+            break
+            
+        U=U_
+    
+    T_fo=T_fi+(q_u*3600/(m*4180))
+    
+    efficiency=100*q_u/(I_t*l_p)   
+    
+    di={'Tfi(C)':T_fi,'Tpm(K)':T_pm,'Ut(W/m^2-K)':Ut,'qu(W)':q_u,'Tfo(C)':T_fo,'efficiency(%)':efficiency}
+    lt.append(di)
+    
+    T_fi=T_fi+10
+      
+data=pd.DataFrame(lt)
+data
+
+x=data['Tfi(C)']
+y=data['efficiency(%)']
+plt.plot(x, y)
+  
+# naming the x axis
+plt.xlabel('Fluid Inlet Temperature')
+# naming the y axis
+plt.ylabel('Efficiency')
+  
+# giving a title to my graph
+plt.title('Variation of Efficiency with Inlet Temperature')
+  
+# function to show the plot
+plt.show()
